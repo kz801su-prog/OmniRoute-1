@@ -24,7 +24,11 @@ try {
   // update-notifier is optional in pruned standalone environments
 }
 import { isNativeBinaryCompatible } from "../scripts/build/native-binary-compat.mjs";
-import { getNodeRuntimeSupport, getNodeRuntimeWarning } from "./nodeRuntimeSupport.mjs";
+import {
+  getNodeRuntimeSupport,
+  getNodeRuntimeWarning,
+  parseNodeVersion,
+} from "./nodeRuntimeSupport.mjs";
 import { getDefaultDataDir } from "./cli/data-dir.mjs";
 import { shouldProvisionStorageKey } from "./cli/utils/storageKeyProvision.mjs";
 import { isVersionFastPath } from "./cli/utils/versionFastPath.mjs";
@@ -63,18 +67,28 @@ if (isVersionFastPath(process.argv)) {
 // is a separate, pre-existing limitation this fix does not attempt to solve.
 if (shouldProvisionStorageKey(process.argv)) {
   const nodeSupport = getNodeRuntimeSupport();
+  const allowUnsupported =
+    process.env.OMNIROUTE_ALLOW_UNSUPPORTED_NODE === "1" ||
+    process.env.OMNIROUTE_SKIP_NODE_CHECK === "1" ||
+    (parseNodeVersion().major >= 20 && process.env.OMNIROUTE_STRICT_NODE !== "1");
   if (!nodeSupport.nodeCompatible) {
     const runtimeWarning = getNodeRuntimeWarning() || "Unsupported Node.js runtime detected.";
-    console.error(
-      `\x1b[31m✖ Node.js ${nodeSupport.nodeVersion} is not supported.\x1b[0m\n` +
-        `  ${runtimeWarning}\n` +
-        `  Supported runtimes: ${nodeSupport.supportedDisplay}\n` +
-        `  Recommended: Node.js ${nodeSupport.recommendedVersion}\n` +
-        `  If you installed OmniRoute globally, run \`node -v\` and confirm \`omniroute\` is not resolving to\n` +
-        `  a stale/distro-packaged \`nodejs\` binary (e.g. /usr/bin/node) instead of the version you expect —\n` +
-        `  that mismatch is the most common cause even when package.json's engines range is correct.`
-    );
-    process.exit(1);
+    if (allowUnsupported) {
+      console.warn(
+        `\x1b[33m⚠ Warning: Node.js ${nodeSupport.nodeVersion} is outside OmniRoute's recommended LTS lines (${nodeSupport.supportedDisplay}). Proceeding with compatibility mode.\x1b[0m`
+      );
+    } else {
+      console.error(
+        `\x1b[31m✖ Node.js ${nodeSupport.nodeVersion} is not supported.\x1b[0m\n` +
+          `  ${runtimeWarning}\n` +
+          `  Supported runtimes: ${nodeSupport.supportedDisplay}\n` +
+          `  Recommended: Node.js ${nodeSupport.recommendedVersion}\n` +
+          `  If you installed OmniRoute globally, run \`node -v\` and confirm \`omniroute\` is not resolving to\n` +
+          `  a stale/distro-packaged \`nodejs\` binary (e.g. /usr/bin/node) instead of the version you expect —\n` +
+          `  that mismatch is the most common cause even when package.json's engines range is correct.`
+      );
+      process.exit(1);
+    }
   }
 }
 
